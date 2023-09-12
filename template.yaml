@@ -1,0 +1,156 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: A basic SAM Template for Slots and Bookings API.
+
+Resources:
+  # DynamoDB Table for Slots
+  SlotsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Slots
+      AttributeDefinitions:
+        - AttributeName: date
+          AttributeType: S   # Update the attribute type to string (S)
+        - AttributeName: time
+          AttributeType: S
+        - AttributeName: isBooked
+          AttributeType: BOOL
+        - AttributeName: bookedBy
+          AttributeType: S
+      KeySchema:
+        - AttributeName: date
+          KeyType: HASH
+        - AttributeName: time
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # DynamoDB Table for Bookings
+  BookingsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: Bookings
+      AttributeDefinitions:
+        - AttributeName: bookingId
+          AttributeType: N
+      KeySchema:
+        - AttributeName: bookingId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # Lambda function for Slots API
+  SlotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: slots/
+      Handler: app.handler
+      Runtime: nodejs14.x
+      Events:
+        GetSlots:
+          Type: Api
+          Properties:
+            Path: /slots
+            Method: get
+
+  # Lambda function for Booking API
+  BookingsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: bookings/
+      Handler: app.handler
+      Runtime: nodejs14.x
+      Events:
+        CreateBooking:
+          Type: Api
+          Properties:
+            Path: /booking
+            Method: post
+            
+  # Lambda function for adding slots
+  AddSlotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: addSlots/
+      Handler: app.handler
+      Runtime: nodejs14.x
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateSlot:
+          Type: Api
+          Properties:
+            Path: /addSlot
+            Method: post
+
+  # Lambda function for auto adding slots
+  AutoAddSlotsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: autoAddSlots/
+      Handler: app.handler
+      Runtime: nodejs14.x
+      Policies:
+        - AmazonDynamoDBFullAccess
+      Events:
+        CreateAutoAddSlot:
+          Type: Api
+          Properties:
+            Path: /autoAddSlots
+            Method: post
+
+  # API Gateway resource
+  API:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      DefinitionBody:
+        swagger: '2.0'
+        info:
+          title: 'Slots and Bookings API'
+          version: '1.0'
+        paths:
+          /slots:
+            get:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${SlotsFunction.Arn}/invocations
+          /booking:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${BookingsFunction.Arn}/invocations
+          /addSlot:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AddSlotsFunction.Arn}/invocations
+          /autoAddSlots:
+            post:
+              x-amazon-apigateway-integration:
+                type: aws_proxy
+                httpMethod: POST
+                uri:
+                  Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${AutoAddSlotsFunction.Arn}/invocations
+
+Outputs:
+  SlotsApi:
+    Description: "API Gateway endpoint URL for Prod environment for Slots function"
+    Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/Prod/slots/"
+  BookingsApi:
+    Description: "API Gateway endpoint URL for Prod environment for Bookings function"
+    Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/Prod/booking/"
+  AddSlotsApi:
+    Description: "API Gateway endpoint URL for Prod environment for AddSlots function"
+    Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/Prod/addSlot/"
+  AutoAddSlotsApi:
+    Description: "API Gateway endpoint URL for Prod environment for AutoAddSlots function"
+    Value: !Sub "https://${API}.execute-api.${AWS::Region}.amazonaws.com/Prod/autoAddSlots/"
